@@ -1,0 +1,246 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Singleton game state ───────────────────────────────────────────
+model Game {
+  id          Int      @id @default(1)
+  phase       Phase    @default(PORTFOLIO)
+  marketOpen  Boolean  @default(false)
+  gameVersion Int      @default(1)
+  updatedAt   DateTime @updatedAt
+}
+
+enum Phase {
+  PORTFOLIO
+  GOOD_1
+  GOOD_2
+  GOOD_3
+  REVEAL_GOOD
+  BAD_1
+  BAD_2
+  BAD_3
+  REVEAL_BAD
+  FINAL_DECISION
+  END
+}
+
+// ─── Companies ──────────────────────────────────────────────────────
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  symbol    String   @unique
+  sector    String
+  basePrice Decimal  @db.Decimal(20, 6) @default(1000)
+  poolSize  Int      @default(2000)
+  poolSold  Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  trades         Trade[]
+  eventCompanies EventCompany[]
+  snapshotHoldings SnapshotHolding[]
+}
+
+// ─── Teams ──────────────────────────────────────────────────────────
+model Team {
+  id           String   @id @default(cuid())
+  name         String
+  username     String   @unique
+  passwordHash String
+  startingCash Decimal  @db.Decimal(20, 6) @default(10000000)
+  cash         Decimal  @db.Decimal(20, 6) @default(10000000)
+  createdAt    DateTime @default(now())
+
+  trades       Trade[]
+  choices      Choice[]
+  eventResults EventResult[]
+  snapshots    Snapshot[]
+  judgeScores  JudgeScore[]
+  teamNotes    TeamNotes?
+}
+
+// ─── Trades (buys & sells in PORTFOLIO phase) ───────────────────────
+model Trade {
+  id        String   @id @default(cuid())
+  teamId    String
+  companyId String
+  qty       Int      // positive = buy, negative = sell
+  price     Decimal  @db.Decimal(20, 6)
+  createdAt DateTime @default(now())
+
+  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@index([companyId])
+}
+
+// ─── Event definitions ──────────────────────────────────────────────
+model EventDef {
+  id           String    @id @default(cuid())
+  code         String    @unique // G1, G2, G3, B1, B2, B3
+  kind         EventKind
+  orderIndex   Int       // 1-6 for ordering
+  title        String
+  questionText String
+  resolved     Boolean   @default(false)
+
+  eventCompanies EventCompany[]
+  choices        Choice[]
+  eventResults   EventResult[]
+}
+
+enum EventKind {
+  GOOD
+  BAD
+}
+
+// ─── Per-event, per-company parameters ──────────────────────────────
+model EventCompany {
+  id             String  @id @default(cuid())
+  eventId        String
+  companyId      String
+  aggressiveMove Decimal @db.Decimal(10, 6) @default(0) // fraction, e.g. 0.30 for 30%
+  moderateMove   Decimal @db.Decimal(10, 6) @default(0) // fraction
+  holdDrop       Decimal @db.Decimal(10, 6) @default(0) // fraction, for bad events
+
+  event   EventDef @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, companyId])
+}
+
+// ─── Team choices per event (upsert, last write wins) ───────────────
+model Choice {
+  id        String      @id @default(cuid())
+  teamId    String
+  eventId   String
+  option    ChoiceOption
+  updatedAt DateTime    @updatedAt
+
+  team  Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  event EventDef @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, eventId])
+}
+
+enum ChoiceOption {
+  AGGRESSIVE
+  MODERATE
+  PASS
+  HOLD
+  SELL_HALF
+  EXIT
+}
+
+// ─── Resolved event results per team ────────────────────────────────
+model EventResult {
+  id              String       @id @default(cuid())
+  teamId          String
+  eventId         String
+  chosenOption    ChoiceOption
+  effectiveOption ChoiceOption
+  downgradedFrom  ChoiceOption?
+  feePaid         Decimal      @db.Decimal(20, 6) @default(0)
+  cashBefore      Decimal      @db.Decimal(20, 6)
+  cashAfter       Decimal      @db.Decimal(20, 6)
+  netWorthBefore  Decimal      @db.Decimal(20, 6)
+  netWorthAfter   Decimal      @db.Decimal(20, 6)
+  netWorthDelta   Decimal      @db.Decimal(20, 6)
+  // Per-option deltas for scoring
+  optionDeltas    Json         // { AGGRESSIVE: "123.45", MODERATE: "67.89", PASS: "0" } or Hold/SellHalf/Exit
+  // Per-company before/after details
+  companyDetails  Json         // [{ companyId, symbol, sharesBefore, sharesAfter, priceBefore, priceAfter }]
+  // Parameters used (frozen for audit)
+  parameters      Json         // { feeRate, exitFactor, ... }
+  frozen          Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+
+  team  Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  event EventDef @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, eventId])
+}
+
+// ─── Snapshots per team per milestone ───────────────────────────────
+model Snapshot {
+  id        String   @id @default(cuid())
+  teamId    String
+  milestone Phase    // PORTFOLIO, REVEAL_GOOD, REVEAL_BAD, END
+  cash      Decimal  @db.Decimal(20, 6)
+  netWorth  Decimal  @db.Decimal(20, 6)
+  createdAt DateTime @default(now())
+
+  team     Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  holdings SnapshotHolding[]
+
+  @@unique([teamId, milestone])
+}
+
+model SnapshotHolding {
+  id         String  @id @default(cuid())
+  snapshotId String
+  companyId  String
+  shares     Int
+  price      Decimal @db.Decimal(20, 6)
+
+  snapshot Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([snapshotId, companyId])
+}
+
+// ─── Rate limiting for login ────────────────────────────────────────
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  username  String
+  ip        String
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([username, ip, createdAt])
+}
+
+// ─── Judge scores (top 5 only) ──────────────────────────────────────
+model JudgeScore {
+  id            String @id @default(cuid())
+  teamId        String
+  judgeName     String
+  clarity       Int    @default(0) // 0 or 1
+  justification Int    @default(0) // 0 or 1
+  answerQuality Int    @default(0) // 0 or 1
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, judgeName])
+}
+
+// ─── Team notes (written answers) ───────────────────────────────────
+model TeamNotes {
+  id     String @id @default(cuid())
+  teamId String @unique
+
+  line1  String @default("") // Why we built this portfolio
+  line2  String @default("") // Our most important decision
+  line3  String @default("") // What we would change
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+// ─── Audit log ──────────────────────────────────────────────────────
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  actor     String   // "admin" or team username
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
