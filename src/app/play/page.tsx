@@ -53,7 +53,7 @@ export default function PlayPage() {
         <div className="lg:col-span-3 space-y-8">
           <AnimatePresence mode="wait">
             {state.phase === "PORTFOLIO" && <PortfolioPhase key="portfolio" state={state} mutate={mutate} />}
-            {(state.phase.startsWith("GOOD_") || state.phase.startsWith("BAD_")) && <EventPhase key="event" state={state} mutate={mutate} />}
+            {(state.phase.startsWith("GOOD_") || state.phase.startsWith("BAD_")) && <EventPhase key={`event-${state.phase}`} state={state} mutate={mutate} />}
             {(state.phase === "REVEAL_GOOD" || state.phase === "REVEAL_BAD") && <RevealPhase key="reveal" state={state} />}
             {state.phase === "FINAL_DECISION" && <FinalDecisionPhase key="final" state={state} mutate={mutate} />}
             {state.phase === "END" && <EndPhase key="end" state={state} />}
@@ -251,7 +251,7 @@ function EventPhase({ state, mutate }: { state: any, mutate: any }) {
 
   if (!currentEvent) return null;
 
-  const isLocked = !!currentEvent.currentChoice;
+  const [localLock, setLocalLock] = useState(false); const isLocked = !!currentEvent.currentChoice || localLock;
   const activeChoice = currentEvent.currentChoice || selectedOption;
 
   const handleConfirm = async () => {
@@ -261,7 +261,7 @@ function EventPhase({ state, mutate }: { state: any, mutate: any }) {
     try {
       const res = await fetch("/api/me/choice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ eventId: currentEvent.eventId, option: selectedOption }) });
       if (!res.ok) throw new Error((await res.json()).error || "Submission failed");
-      toast.success("STRATEGY LOCKED", { className: "font-mono border-orange-500/50 bg-black/90 text-orange-500" });
+      toast.success("STRATEGY LOCKED", { className: "font-mono border-orange-500/50 bg-black/90 text-orange-500" }); setLocalLock(true);
       mutate();
     } catch (err: any) { toast.error(err.message); } finally { setLoading(false); }
   };

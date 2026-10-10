@@ -602,7 +602,7 @@ function CompaniesEditor({ companies, mutate }: { companies: any[], mutate: any 
             </div>
           )}
           
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2">
             {editingId === c.id ? (
               <>
                 <Button variant="default" size="sm" onClick={() => handleSave(c.id)}><Save size={14} className="mr-2"/> Save</Button>
@@ -694,7 +694,7 @@ function EventsEditor({ events, mutate }: { events: any[], mutate: any }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2">
         <Button size="sm" variant="outline" className="w-full font-bold text-profit border-profit/50 hover:bg-profit/10" onClick={() => handleAddEvent('GOOD')}>
           <Plus size={16} className="mr-2" /> ADD GOOD EVENT
         </Button>

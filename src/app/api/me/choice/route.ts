@@ -42,11 +42,17 @@ export async function POST(req: NextRequest) {
       throw new Error('You can only submit choices for the currently active event');
     }
 
-    // Upsert choice
-    await prisma.choice.upsert({
+        // Ensure no existing choice
+    const existingChoice = await prisma.choice.findUnique({
       where: { teamId_eventId: { teamId, eventId } },
-      update: { option },
-      create: { teamId, eventId, option },
+    });
+    if (existingChoice) {
+      throw new Error('Your choice for this event is already locked in.');
+    }
+
+    // Create choice
+    await prisma.choice.create({
+      data: { teamId, eventId, option },
     });
 
     return NextResponse.json({ success: true, option });

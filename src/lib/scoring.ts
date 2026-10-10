@@ -18,7 +18,13 @@ export interface TeamScore {
 }
 
 export async function computeLeaderboardScores(): Promise<TeamScore[]> {
-  const teams = await prisma.team.findMany({ include: { choices: true, trades: true } });
+  const teams = await prisma.team.findMany({ 
+    include: { 
+      choices: true, 
+      trades: true, 
+      eventResults: { include: { event: true } } 
+    } 
+  });
   
   const N = teams.length;
   if (N === 0) return [];
@@ -43,9 +49,18 @@ export async function computeLeaderboardScores(): Promise<TeamScore[]> {
   // Find max loss for Risk Management
   let maxLoss = 0;
   const teamLosses = new Map<string, number>();
-  for (const ts of liveStates) {
-    const loss = 0; // Requires adding this to state
-    teamLosses.set(ts.teamId, loss);
+  
+  for (const team of teams) {
+    let loss = 0;
+    for (const er of team.eventResults) {
+      if (er.event.kind === 'BAD') {
+        const delta = Number(er.netWorthDelta);
+        if (delta < 0) {
+          loss += Math.abs(delta);
+        }
+      }
+    }
+    teamLosses.set(team.id, loss);
     if (loss > maxLoss) maxLoss = loss;
   }
 
@@ -67,17 +82,30 @@ export async function computeLeaderboardScores(): Promise<TeamScore[]> {
     else if (initialCompaniesCount >= 6) divScore = 10;
 
     const loss = teamLosses.get(team.id) || 0;
+    // A team that gains or breaks even scores 10. If nobody lost money, everyone scores 10.
     const downsideScore = maxLoss <= 0 ? 10 : Math.max(0, 10 * (1 - (loss / maxLoss)));
     const riskManagement = divScore + downsideScore;
 
     // 3. Decision Quality
-    // For a perfect implementation we replay the state. For now, since state.ts is complex, 
-    // we use a simplified DQ based on their choices or just award them the average 15/30 if they played.
-    // Let's calculate it fully using the timeline in getTeamStates if we had it, but we can approximate:
-    let decisionQuality = 0; 
-    if (decisionQuality === 0 && team.choices.length > 0) {
-      // Default to 2.5 per event if not natively computed
-      decisionQuality = team.choices.length * 2.5;
+    let decisionQuality = 0;
+    for (const er of team.eventResults) {
+      const deltas = er.optionDeltas as Record<string, string>;
+      const vals = Object.values(deltas).map(Number);
+      const chosen = Number(er.netWorthDelta);
+      
+      let best = -Infinity;
+      let worst = Infinity;
+      for (const v of vals) {
+        if (v > best) best = v;
+        if (v < worst) worst = v;
+      }
+      
+      if (best === worst) {
+        decisionQuality += 2.5;
+      } else {
+        const evScore = 5 * (chosen - worst) / (best - worst);
+        decisionQuality += evScore;
+      }
     }
 
     const autoScore = financialReturn + decisionQuality + riskManagement;
@@ -95,5 +123,5 @@ export async function computeLeaderboardScores(): Promise<TeamScore[]> {
     });
   }
 
-  return scores.sort((a, b) => b.finalScore - a.finalScore);
+  return scores;
 }
