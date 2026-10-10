@@ -62,7 +62,9 @@ export default function AdminPage() {
         warningMsg = "WARNING: The following teams haven't invested in at least 3 companies:\n" + teamsMissing.map((t: any) => "- " + t.name).join("\n") + "\n\nIf you advance, these teams will lose points on their Risk Management Diversification score.\n\nAre you sure you want to advance to " + p + "?";
       }
     } else if ((state.game.phase.startsWith("GOOD_") || state.game.phase.startsWith("BAD_")) && p !== state.game.phase) {
-      const curEvent = state.events?.find((e: any) => e.code === state.game.phase);
+      const eventCodeMap: Record<string, string> = { "GOOD_1": "G1", "GOOD_2": "G2", "GOOD_3": "G3", "BAD_1": "B1", "BAD_2": "B2", "BAD_3": "B3" };
+        const mappedCode = eventCodeMap[state.game.phase] || state.game.phase;
+        const curEvent = state.events?.find((e: any) => e.code === mappedCode);
       if (curEvent) {
         const teamsMissing = state.leaderboard.filter((t: any) => !t.choices.some((c: any) => c.eventId === curEvent.id));
         if (teamsMissing.length > 0) {
