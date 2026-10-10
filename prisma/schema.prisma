@@ -11,24 +11,10 @@ datasource db {
 // ─── Singleton game state ───────────────────────────────────────────
 model Game {
   id          Int      @id @default(1)
-  phase       Phase    @default(PORTFOLIO)
+  phase       String   @default("PORTFOLIO")
   marketOpen  Boolean  @default(false)
   gameVersion Int      @default(1)
   updatedAt   DateTime @updatedAt
-}
-
-enum Phase {
-  PORTFOLIO
-  GOOD_1
-  GOOD_2
-  GOOD_3
-  REVEAL_GOOD
-  BAD_1
-  BAD_2
-  BAD_3
-  REVEAL_BAD
-  FINAL_DECISION
-  END
 }
 
 // ─── Companies ──────────────────────────────────────────────────────
@@ -38,7 +24,7 @@ model Company {
   symbol    String   @unique
   sector    String
   basePrice Decimal  @db.Decimal(20, 6) @default(1000)
-  poolSize  Int      @default(2000)
+  poolSize  Int      @default(3000)
   poolSold  Int      @default(0)
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -54,8 +40,8 @@ model Team {
   name         String
   username     String   @unique
   passwordHash String
-  startingCash Decimal  @db.Decimal(20, 6) @default(10000000)
-  cash         Decimal  @db.Decimal(20, 6) @default(10000000)
+  startingCash Decimal  @db.Decimal(20, 6) @default(1000000)
+  cash         Decimal  @db.Decimal(20, 6) @default(1000000)
   createdAt    DateTime @default(now())
 
   trades       Trade[]
@@ -173,7 +159,7 @@ model EventResult {
 model Snapshot {
   id        String   @id @default(cuid())
   teamId    String
-  milestone Phase    // PORTFOLIO, REVEAL_GOOD, REVEAL_BAD, END
+  milestone String   // PORTFOLIO, REVEAL_GOOD, REVEAL_BAD, END
   cash      Decimal  @db.Decimal(20, 6)
   netWorth  Decimal  @db.Decimal(20, 6)
   createdAt DateTime @default(now())
