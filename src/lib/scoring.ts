@@ -67,6 +67,15 @@ export async function computeLeaderboardScores(): Promise<TeamScore[]> {
   const scores: TeamScore[] = [];
 
   for (const team of teams) {
+    const uniqueEr = new Map<string, any>();
+    for (const er of team.eventResults) {
+      const ext = uniqueEr.get(er.eventId);
+      if (!ext || new Date(er.createdAt).getTime() > new Date(ext.createdAt).getTime()) {
+        uniqueEr.set(er.eventId, er);
+      }
+    }
+    team.eventResults = Array.from(uniqueEr.values()) as any;
+
     const ts = liveStates.find(s => s.teamId === team.id)!;
     const rank = rankMap.get(team.id) || N;
     
