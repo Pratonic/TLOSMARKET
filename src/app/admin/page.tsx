@@ -59,14 +59,14 @@ export default function AdminPage() {
     if (state.game.phase === "PORTFOLIO" && p !== "PORTFOLIO") {
       const teamsMissing = state.leaderboard.filter((t: any) => t.holdings.filter((h: any) => h.shares > 0).length < 3);
       if (teamsMissing.length > 0) {
-        warningMsg = "WARNING: The following teams haven't invested in at least 3 companies:\n" + teamsMissing.map((t: any) => "- " + t.name).join("\n") + "\n\nAre you sure you want to advance to " + p + "?";
+        warningMsg = "WARNING: The following teams haven't invested in at least 3 companies:\n" + teamsMissing.map((t: any) => "- " + t.name).join("\n") + "\n\nIf you advance, these teams will lose points on their Risk Management Diversification score.\n\nAre you sure you want to advance to " + p + "?";
       }
     } else if ((state.game.phase.startsWith("GOOD_") || state.game.phase.startsWith("BAD_")) && p !== state.game.phase) {
       const curEvent = state.events?.find((e: any) => e.code === state.game.phase);
       if (curEvent) {
         const teamsMissing = state.leaderboard.filter((t: any) => !t.choices.some((c: any) => c.eventId === curEvent.id));
         if (teamsMissing.length > 0) {
-          warningMsg = "WARNING: The following teams HAVEN'T made a choice for " + state.game.phase + ":\n" + teamsMissing.map((t: any) => "- " + t.name).join("\n") + "\n\nAre you sure you want to advance to " + p + "?";
+          warningMsg = "WARNING: The following teams HAVEN'T made a choice for " + state.game.phase + ":\n" + teamsMissing.map((t: any) => "- " + t.name).join("\n") + "\n\nIf you advance, these teams will be automatically penalized with the WORST option possible for this round.\n\nAre you sure you want to advance to " + p + "?";
         }
       }
     }
